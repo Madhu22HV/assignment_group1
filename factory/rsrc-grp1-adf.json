@@ -1,0 +1,9 @@
+{
+	"name": "rsrc-grp1-adf",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "9a375677-935e-426b-8cfe-c3b184ee60aa",
+		"tenantId": "d55dda6c-6716-4b52-af8c-722561bc4332"
+	}
+}

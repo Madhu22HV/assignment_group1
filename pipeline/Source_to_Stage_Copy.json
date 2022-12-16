@@ -1,0 +1,210 @@
+{
+	"name": "Source_to_Stage_Copy",
+	"properties": {
+		"activities": [
+			{
+				"name": "LookUp Table List",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlServerSource",
+						"sqlReaderQuery": "Select TABLE_NAME from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA='SalesLT' and TABLE_NAME<>'Product' and TABLE_TYPE='BASE TABLE'",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "SQLDB",
+						"type": "DatasetReference"
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Load each table to ADLS",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "LookUp Table List",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('LookUp Table List').output.value",
+						"type": "Expression"
+					},
+					"batchCount": 9,
+					"activities": [
+						{
+							"name": "Copy data",
+							"type": "Copy",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.12:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlServerSource",
+									"sqlReaderQuery": {
+										"value": "@concat('Select * from SalesLT.',item().TABLE_NAME)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"sink": {
+									"type": "JsonSink",
+									"storeSettings": {
+										"type": "AzureBlobFSWriteSettings"
+									},
+									"formatSettings": {
+										"type": "JsonWriteSettings"
+									}
+								},
+								"enableStaging": false
+							},
+							"inputs": [
+								{
+									"referenceName": "SQLDB",
+									"type": "DatasetReference"
+								}
+							],
+							"outputs": [
+								{
+									"referenceName": "ADLS_Json",
+									"type": "DatasetReference",
+									"parameters": {
+										"Filename": {
+											"value": "@concat(item().TABLE_NAME,'.json')",
+											"type": "Expression"
+										}
+									}
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"name": "Copy Product from file server",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "ExcelSource",
+						"storeSettings": {
+							"type": "FileServerReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						}
+					},
+					"sink": {
+						"type": "JsonSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "JsonWriteSettings"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "FileSystemExcel",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "ADLS_Json",
+						"type": "DatasetReference",
+						"parameters": {
+							"Filename": "Product.json"
+						}
+					}
+				]
+			},
+			{
+				"name": "Transformation and dump to DW",
+				"type": "ExecuteDataFlow",
+				"dependsOn": [
+					{
+						"activity": "Load each table to ADLS",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					},
+					{
+						"activity": "Copy Product from file server",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"dataflow": {
+						"referenceName": "ProductDetail",
+						"type": "DataFlowReference",
+						"datasetParameters": {
+							"SalesOrderDetail": {
+								"Filename": "SalesOrderDetail.json"
+							},
+							"Product": {
+								"Filename": "Product.json"
+							}
+						}
+					},
+					"staging": {
+						"linkedService": {
+							"referenceName": "ADLS",
+							"type": "LinkedServiceReference"
+						},
+						"folderPath": "stage/synapsestage"
+					},
+					"compute": {
+						"coreCount": 8,
+						"computeType": "General"
+					},
+					"traceLevel": "Fine"
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2022-12-16T13:59:17Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

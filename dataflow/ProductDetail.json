@@ -1,0 +1,123 @@
+{
+	"name": "ProductDetail",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "ADLS_Json",
+						"type": "DatasetReference"
+					},
+					"name": "SalesOrderDetail"
+				},
+				{
+					"dataset": {
+						"referenceName": "ADLS_Json",
+						"type": "DatasetReference"
+					},
+					"name": "Product"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "AzureSynapseAnalyticsTable1",
+						"type": "DatasetReference"
+					},
+					"name": "sink1"
+				}
+			],
+			"transformations": [
+				{
+					"name": "lookup"
+				},
+				{
+					"name": "select"
+				},
+				{
+					"name": "select1"
+				},
+				{
+					"name": "derivedColumn1"
+				},
+				{
+					"name": "filter1"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          LineTotal as double,",
+				"          ModifiedDate as string,",
+				"          OrderQty as short,",
+				"          ProductID as short,",
+				"          SalesOrderDetailID as integer,",
+				"          SalesOrderID as integer,",
+				"          UnitPrice as double,",
+				"          UnitPriceDiscount as double,",
+				"          rowguid as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     inferDriftedColumnTypes: true,",
+				"     ignoreNoFilesFound: false,",
+				"     documentForm: 'documentPerLine') ~> SalesOrderDetail",
+				"source(output(",
+				"          Color as string,",
+				"          ListPrice as double,",
+				"          Name as string,",
+				"          ProductCategoryID as short,",
+				"          ProductID as short,",
+				"          ProductModelID as short,",
+				"          ProductNumber as string,",
+				"          Size as string,",
+				"          StandardCost as double,",
+				"          Weight as string",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     inferDriftedColumnTypes: true,",
+				"     ignoreNoFilesFound: false,",
+				"     documentForm: 'documentPerLine') ~> Product",
+				"SalesOrderDetail, select lookup(SalesOrderDetail@ProductID == select@ProductID,",
+				"     multiple: false,",
+				"     pickup: 'any',",
+				"     broadcast: 'auto')~> lookup",
+				"Product select(mapColumn(",
+				"          Name,",
+				"          ProductID",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select",
+				"lookup select(mapColumn(",
+				"          SalesOrderID,",
+				"          SalesOrderDetailID,",
+				"          ProductID = select@ProductID,",
+				"          Name,",
+				"          LineTotal,",
+				"          OrderQty,",
+				"          UnitPrice,",
+				"          UnitPriceDiscount,",
+				"          rowguid,",
+				"          ModifiedDate",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> select1",
+				"select1 derive(AddedDate = currentDate()) ~> derivedColumn1",
+				"derivedColumn1 filter(Name=='Sport-100 Helmet, Black') ~> filter1",
+				"filter1 sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     deletable:false,",
+				"     insertable:true,",
+				"     updateable:false,",
+				"     upsertable:false,",
+				"     format: 'table',",
+				"     staged: true,",
+				"     allowCopyCommand: true,",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError') ~> sink1"
+			]
+		}
+	}
+}
